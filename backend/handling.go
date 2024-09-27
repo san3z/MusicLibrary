@@ -3,7 +3,7 @@ package backend
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"text/template"
 
@@ -15,8 +15,9 @@ func Handling() {
 	r.HandleFunc("/", home)
 	r.HandleFunc("/insert-music", insertMusicHandler)
 	r.HandleFunc("/get-music", getMusicHandler)
+	r.HandleFunc("/json-test", testJsonHandler)
 	fmt.Println("Server started")
-	http.ListenAndServe(":80", r)
+	http.ListenAndServe(":9090", r)
 }
 
 func renderHTML(w http.ResponseWriter, r *http.Request, filename string) {
@@ -94,12 +95,24 @@ func insertMusicHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func testJsonHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	fmt.Println("Received request at /json-test")
+	fmt.Println("Request Method:", r.Method)
+	fmt.Println("Request Headers:", r.Header)
+	if r.Method == "GET" {
+		fmt.Fprint(w, "GET request received")
+	}
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	body, err := ioutil.ReadAll(r.Body)
+	db := connDB()
+	defer db.Close()
+
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -112,5 +125,20 @@ func testJsonHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Fprintf(w, "JSON успешно обработан!")
+	fmt.Printf("Полученный JSON: %+v\n", jsonInput)
+
+	music := Music{
+		Group: jsonInput["group"].(string),
+		Song:  jsonInput["song"].(string),
+	}
+
+	fmt.Println("INSERT to DB")
+	_, err = db.Exec((`INSERT INTO public."musicLibrary"("Group", "Song") VALUES($1, $2)`), music.Group, music.Song)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "JSON успешно обработан и записан в базу данных")
 }
