@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Music Library</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            width: 800px;
+            max-width: 90%;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        button {
+            margin-top: 10px;
+        }
+        .error, .success {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .error {
+            background-color: #ffe6e6;
+            color: #ff3333;
+        }
+        .success {
+            background-color: #e6ffe6;
+            color: #33ff33;
+        }
+    </style>
+</head>
+<body>
+    <h1>Music Library</h1>
+
+    <!-- Form for inserting music -->
+    <h2>Add Music</h2>
+    <form id="addMusicForm">
+        <label for="music-group">Group:</label>
+        <input type="text" id="music-group" name="music-group" required><br><br>
+        <label for="music-song">Song:</label>
+        <input type="text" id="music-song" name="music-song" required><br><br>
+        <button type="submit">Add Music</button>
+    </form>
+    <div id="addResult"></div>
+
+    <!-- Form for getting music -->
+    <h2>Get Music</h2>
+    <button onclick="getMusic()">Get All Music</button>
+    <div id="musicList"></div>
+
+    <!-- Form for testing JSON operations -->
+    <h2>JSON Operations</h2>
+    <form id="jsonForm">
+        <label for="json-input">Enter JSON:</label>
+        <textarea id="json-input" name="json-input"></textarea><br><br>
+        <button type="submit">Test JSON</button>
+    </form>
+    <div id="jsonResult"></div>
+
+    <script>
+       function addMusic(event) {
+    event.preventDefault();
+    $.ajax({
+        url: '/insert-music',
+        method: 'POST',
+        data: $('#addMusicForm').serialize(),
+        success: function(response) {
+            console.log('Server response:', response); // Добавляем логирование
+            $('#addResult').html('<div class="success">' + response + '</div>');
+        },
+        error: function(xhr, status, error) {
+            console.error('Error:', error); // Добавляем логирование ошибок
+            $('#addResult').html('<div class="error">' + xhr.responseText + '</div>');
+        }
+    });
+}
+
+
+function getMusic() {
+    $.ajax({
+        url: '/get-music',
+        method: 'GET',
+        dataType: 'json',
+        success: function(response) {
+            console.log('Server response:', response);
+            var musicHTML = '<ul>';
+            for (var i = 0; i < response.length; i++) {
+                musicHTML += `<li>Group: ${response[i].group}, Song: ${response[i].song}</li>`;
+            }
+            musicHTML += '</ul>';
+            $('#musicList').html(musicHTML);
+        },
+        error: function(xhr, status, error) {
+            console.error('Error:', error);
+            $('#musicList').html('<div class="error">' + xhr.responseText + '</div>');
+        }
+    });
+}
+
+        function testJSON() {
+            $.ajax({
+                url: '/json-test',
+                method: 'POST',
+                data: { jsonInput: $('#json-input').val() },
+                success: function(response) {
+                    $('#jsonResult').html('<div class="success">' + response + '</div>');
+                },
+                error: function(xhr, status, error) {
+                    $('#jsonResult').html('<div class="error">' + xhr.responseText + '</div>');
+                }
+            });
+        }
+
+        $(document).ready(function() {
+            $('#addMusicForm').submit(addMusic);
+            $('#jsonForm').submit(testJSON);
+        });
+    </script>
+</body>
+</html>
