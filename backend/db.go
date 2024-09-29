@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
-	_ "github.com/golang-migrate/migrate/v4/source/file"
-
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
@@ -24,7 +26,7 @@ type MusicNew struct {
 	Song     string `json:"song"`
 }
 
-func connDB() *sql.DB {
+func ConnDB() *sql.DB {
 	fmt.Println("Loading .env")
 	err := godotenv.Load()
 	dbConf := fmt.Sprintf("host=%s port=%s dbname=%s user=%s password=%s sslmode=disable",
@@ -47,34 +49,48 @@ func connDB() *sql.DB {
 	return db
 }
 
-/*func runMigrations() error {
-	godotenv.Load()
-	dbConnStr := fmt.Sprintf("host=%s port=%s dbname=%s user=%s password=%s sslmode=disable",
-		os.Getenv("DBHOST"), os.Getenv("DBPORT"),
-		os.Getenv("DBNAME"), os.Getenv("DBLOGIN"),
-		os.Getenv("DBPASS"))
-	db, _ := sql.Open("postgres", dbConnStr)
+func RunMigrations(db *sql.DB) error {
+	// Получаем абсолютный путь к директории с миграциями
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	fmt.Println(currentDir)
+	migrationsDir := filepath.Join(currentDir, "/", "migrations")
+
+	// Проверяем, что директория существует
+	_, err = os.Stat(migrationsDir)
+	if err != nil {
+		return fmt.Errorf("migration directory not found: %s", migrationsDir)
+	}
+	fmt.Println("makin migration source")
+	// Создаем источник миграций из файловой системы
+	source, err := iofs.New(os.DirFS("musicLibrary"), migrationsDir)
+	if err != nil {
+		return err
+	}
+	fmt.Println("creating migrator")
+	// Создаем мигратор
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
-		log.Fatal("WithInstance", err)
+		log.Fatal(err)
 	}
-	m, err := migrate.NewWithDatabaseInstance(
-		"musiclibrary/backend/database/001_create_table.sql",
-		"postgres", driver,
-	)
+
+	migrator, err := migrate.NewWithInstance("iofs", source, "postgres", driver)
 	if err != nil {
-		log.Fatal("NewWithDatabaseInstance", err)
+		return err
 	}
-
-	fmt.Println("Migration ready")
-
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		log.Fatalf("Failed to apply migrations: %v", err)
+	fmt.Println("STARTING migrations")
+	// Выполняем миграции
+	err = migrator.Up()
+	if err != nil && err != migrate.ErrNoChange {
+		return err
 	}
 
 	fmt.Println("Migrations applied successfully")
+
 	return nil
-}*/
+}
 
 /*func insertMusic(db *sql.DB, s *Music) error {
 	fmt.Println("Workin insertMusic func")

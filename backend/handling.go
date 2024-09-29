@@ -11,6 +11,13 @@ import (
 )
 
 func Handling() {
+	db := ConnDB()
+	defer db.Close()
+	err := RunMigrations(db)
+	if err != nil {
+		fmt.Println("Problem with migrations: ", err)
+	}
+	fmt.Println("Booting migrations")
 	r := mux.NewRouter()
 	r.HandleFunc("/", home)
 	r.HandleFunc("/insert-music", insertMusicHandler)
@@ -18,11 +25,6 @@ func Handling() {
 	r.HandleFunc("/json-test", testJsonHandler)
 	r.HandleFunc("/del-music", delMusicHandler)
 	r.HandleFunc("/upd-music", updateMusicHandler)
-	/*	fmt.Println("Starting migration")
-		err := runMigrations()
-		if err != nil {
-			fmt.Println("Error running migrations: %v ", err)
-		}*/
 	fmt.Println("Server started")
 	http.ListenAndServe(":9090", r)
 }
@@ -46,7 +48,7 @@ func getMusicHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := connDB()
+	db := ConnDB()
 	defer db.Close()
 
 	var music []Music
@@ -77,7 +79,7 @@ func insertMusicHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := connDB()
+	db := ConnDB()
 	defer db.Close()
 
 	err := r.ParseForm()
@@ -115,7 +117,7 @@ func testJsonHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := connDB()
+	db := ConnDB()
 	defer db.Close()
 
 	body, err := io.ReadAll(r.Body)
@@ -154,7 +156,7 @@ func delMusicHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		fmt.Fprintf(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
-	db := connDB()
+	db := ConnDB()
 	defer db.Close()
 
 	body, err := io.ReadAll(r.Body)
@@ -190,7 +192,7 @@ func updateMusicHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		fmt.Fprintf(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
-	db := connDB()
+	db := ConnDB()
 	defer db.Close()
 
 	body, err := io.ReadAll(r.Body)
