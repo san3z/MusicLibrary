@@ -11,11 +11,19 @@ import (
 )
 
 func Handling() {
+	db := ConnDB()
+	defer db.Close()
+	err := RunMigrations(db)
+	if err != nil {
+		fmt.Println("Problem with migrations: ", err)
+	}
 	r := mux.NewRouter()
 	r.HandleFunc("/", home)
 	r.HandleFunc("/insert-music", insertMusicHandler)
 	r.HandleFunc("/get-music", getMusicHandler)
 	r.HandleFunc("/json-test", testJsonHandler)
+	r.HandleFunc("/del-music", delMusicHandler)
+	r.HandleFunc("/upd-music", updateMusicHandler)
 	fmt.Println("Server started")
 	http.ListenAndServe(":9090", r)
 }
@@ -39,21 +47,22 @@ func getMusicHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := connDB()
+	db := ConnDB()
 	defer db.Close()
 
 	var music []Music
-	rows, err := db.Query(`SELECT "Group", "Song" FROM public."musicLibrary"`)
+	rows, err := db.Query(`SELECT "band", "song" FROM public."musicLibrary"`)
 	fmt.Println(rows)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
+		fmt.Println("Error Get Music: ", err)
 		return
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var m Music
-		err = rows.Scan(&m.Group, &m.Song)
+		err = rows.Scan(&m.Band, &m.Song)
 		if err != nil {
 			http.Error(w, "Database error", http.StatusInternalServerError)
 			return
@@ -70,7 +79,7 @@ func insertMusicHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := connDB()
+	db := ConnDB()
 	defer db.Close()
 
 	err := r.ParseForm()
@@ -80,16 +89,15 @@ func insertMusicHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	music := Music{
-		Group: r.FormValue("music-group"),
-		Song:  r.FormValue("music-song"),
+		Band: r.FormValue("music-band"),
+		Song: r.FormValue("music-song"),
 	}
-
-	_, err = db.Exec((`INSERT INTO public."musicLibrary"("Group", "Song") VALUES($1, $2)`), music.Group, music.Song)
+	fmt.Println("Music", music.Band, music.Song)
+	_, err = db.Exec((`INSERT INTO public."musicLibrary"("band", "song") VALUES($1, $2)`), music.Band, music.Song)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
-
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "Music inserted successfully")
 }
@@ -109,7 +117,7 @@ func testJsonHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := connDB()
+	db := ConnDB()
 	defer db.Close()
 
 	body, err := io.ReadAll(r.Body)
@@ -128,12 +136,12 @@ func testJsonHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("Полученный JSON: %+v\n", jsonInput)
 
 	music := Music{
-		Group: jsonInput["group"].(string),
-		Song:  jsonInput["song"].(string),
+		Band: jsonInput["band"].(string),
+		Song: jsonInput["song"].(string),
 	}
 
 	fmt.Println("INSERT to DB")
-	_, err = db.Exec((`INSERT INTO public."musicLibrary"("Group", "Song") VALUES($1, $2)`), music.Group, music.Song)
+	_, err = db.Exec((`INSERT INTO public."musicLibrary"("band", "song") VALUES($1, $2)`), music.Band, music.Song)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
@@ -141,4 +149,95 @@ func testJsonHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "JSON успешно обработан и записан в базу данных")
+}
+
+func delMusicHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("delMusicHandler called")
+	if r.Method != "POST" {
+		fmt.Fprintf(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+	db := ConnDB()
+	defer db.Close()
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var jsonInput map[string]interface{}
+	err = json.Unmarshal(body, &jsonInput)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	fmt.Println("Given JSON:", jsonInput)
+	music := Music{
+		Band: jsonInput["band"].(string),
+		Song: jsonInput["song"].(string),
+	}
+	fmt.Println("JSON Parsed:", music.Band, music.Song)
+	cmd, err := db.Exec(`DELETE FROM public."musicLibrary" WHERE "band" = $1 AND "song" = $2`, music.Band, music.Song)
+	fmt.Println(cmd)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "Music deleted successfully")
+}
+
+func updateMusicHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("updateMusicHandler called")
+	if r.Method != "POST" {
+		fmt.Fprintf(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+	db := ConnDB()
+	defer db.Close()
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var jsonInput map[string]interface{}
+	err = json.Unmarshal(body, &jsonInput)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	fmt.Println("Given JSON:", jsonInput)
+
+	keys := []string{"bandNew", "songNew", "band", "song"}
+	musicNew := MusicNew{}
+
+	for _, key := range keys {
+		value, ok := jsonInput[key].(string)
+		if !ok || value == "" {
+			http.Error(w, fmt.Sprintf("%s is missing or not a string", key), http.StatusBadRequest)
+			return
+		}
+
+		switch key {
+		case "bandNew":
+			musicNew.BandNew = value
+		case "songNew":
+			musicNew.SongNew = value
+		case "band":
+			musicNew.Band = value
+		case "song":
+			musicNew.Song = value
+		}
+	}
+	fmt.Println("JSON Parsed:", musicNew.Band, musicNew.Song)
+	_, err = db.Exec(`UPDATE public."musicLibrary" SET "band" = $1, "song" = $2 WHERE "band" = $3 AND "song" = $4; `, musicNew.BandNew, musicNew.SongNew, musicNew.Band, musicNew.Song)
+	if err != nil {
+		http.Error(w, "Problem with update", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "Music Data changed")
 }
