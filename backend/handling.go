@@ -17,7 +17,6 @@ func Handling() {
 	if err != nil {
 		fmt.Println("Problem with migrations: ", err)
 	}
-	fmt.Println("Booting migrations")
 	r := mux.NewRouter()
 	r.HandleFunc("/", home)
 	r.HandleFunc("/insert-music", insertMusicHandler)
@@ -52,17 +51,18 @@ func getMusicHandler(w http.ResponseWriter, r *http.Request) {
 	defer db.Close()
 
 	var music []Music
-	rows, err := db.Query(`SELECT "Group", "Song" FROM public."musicLibrary"`)
+	rows, err := db.Query(`SELECT "band", "song" FROM public."musicLibrary"`)
 	fmt.Println(rows)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
+		fmt.Println("Error Get Music: ", err)
 		return
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var m Music
-		err = rows.Scan(&m.Group, &m.Song)
+		err = rows.Scan(&m.Band, &m.Song)
 		if err != nil {
 			http.Error(w, "Database error", http.StatusInternalServerError)
 			return
@@ -89,11 +89,11 @@ func insertMusicHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	music := Music{
-		Group: r.FormValue("music-group"),
-		Song:  r.FormValue("music-song"),
+		Band: r.FormValue("music-band"),
+		Song: r.FormValue("music-song"),
 	}
-	fmt.Println("Music", music.Group, music.Song)
-	_, err = db.Exec((`INSERT INTO public."musicLibrary"("Group", "Song") VALUES($1, $2)`), music.Group, music.Song)
+	fmt.Println("Music", music.Band, music.Song)
+	_, err = db.Exec((`INSERT INTO public."musicLibrary"("band", "song") VALUES($1, $2)`), music.Band, music.Song)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
@@ -136,12 +136,12 @@ func testJsonHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("Полученный JSON: %+v\n", jsonInput)
 
 	music := Music{
-		Group: jsonInput["group"].(string),
-		Song:  jsonInput["song"].(string),
+		Band: jsonInput["band"].(string),
+		Song: jsonInput["song"].(string),
 	}
 
 	fmt.Println("INSERT to DB")
-	_, err = db.Exec((`INSERT INTO public."musicLibrary"("Group", "Song") VALUES($1, $2)`), music.Group, music.Song)
+	_, err = db.Exec((`INSERT INTO public."musicLibrary"("band", "song") VALUES($1, $2)`), music.Band, music.Song)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
@@ -173,11 +173,12 @@ func delMusicHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Println("Given JSON:", jsonInput)
 	music := Music{
-		Group: jsonInput["group"].(string),
-		Song:  jsonInput["song"].(string),
+		Band: jsonInput["band"].(string),
+		Song: jsonInput["song"].(string),
 	}
-	fmt.Println("JSON Parsed:", music.Group, music.Song)
-	_, err = db.Exec(`DELETE FROM public."musicLibrary" WHERE "Group" = $1 AND "Song" = $2`, music.Group, music.Song)
+	fmt.Println("JSON Parsed:", music.Band, music.Song)
+	cmd, err := db.Exec(`DELETE FROM public."musicLibrary" WHERE "band" = $1 AND "song" = $2`, music.Band, music.Song)
+	fmt.Println(cmd)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -209,7 +210,7 @@ func updateMusicHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Println("Given JSON:", jsonInput)
 
-	keys := []string{"groupNew", "songNew", "group", "song"}
+	keys := []string{"bandNew", "songNew", "band", "song"}
 	musicNew := MusicNew{}
 
 	for _, key := range keys {
@@ -220,18 +221,18 @@ func updateMusicHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		switch key {
-		case "groupNew":
-			musicNew.GroupNew = value
+		case "bandNew":
+			musicNew.BandNew = value
 		case "songNew":
 			musicNew.SongNew = value
-		case "group":
-			musicNew.Group = value
+		case "band":
+			musicNew.Band = value
 		case "song":
 			musicNew.Song = value
 		}
 	}
-	fmt.Println("JSON Parsed:", musicNew.Group, musicNew.Song)
-	_, err = db.Exec(`UPDATE public."musicLibrary" SET "Group" = $1, "Song" = $2 WHERE "Group" = $3 AND "Song" = $4; `, musicNew.GroupNew, musicNew.SongNew, musicNew.Group, musicNew.Song)
+	fmt.Println("JSON Parsed:", musicNew.Band, musicNew.Song)
+	_, err = db.Exec(`UPDATE public."musicLibrary" SET "band" = $1, "song" = $2 WHERE "band" = $3 AND "song" = $4; `, musicNew.BandNew, musicNew.SongNew, musicNew.Band, musicNew.Song)
 	if err != nil {
 		http.Error(w, "Problem with update", http.StatusInternalServerError)
 		return

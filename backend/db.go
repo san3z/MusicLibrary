@@ -5,25 +5,22 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/postgres"
-	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"github.com/pressly/goose"
 )
 
 type Music struct {
-	Group string `json:"group"`
-	Song  string `json:"song"`
+	Band string `json:"band"`
+	Song string `json:"song"`
 }
 
 type MusicNew struct {
-	GroupNew string `json:"groupNew"`
-	SongNew  string `json:"songNew"`
-	Group    string `json:"group"`
-	Song     string `json:"song"`
+	BandNew string `json:"bandNew"`
+	SongNew string `json:"songNew"`
+	Band    string `json:"band"`
+	Song    string `json:"song"`
 }
 
 func ConnDB() *sql.DB {
@@ -50,51 +47,18 @@ func ConnDB() *sql.DB {
 }
 
 func RunMigrations(db *sql.DB) error {
-	// Получаем абсолютный путь к директории с миграциями
-	currentDir, err := os.Getwd()
+	fmt.Println("Running migrations")
+	err := goose.Up(db, "migrations/")
 	if err != nil {
-		return err
+		fmt.Printf("Error running migrations: %s\n ", err)
 	}
-	fmt.Println(currentDir)
-	migrationsDir := filepath.Join(currentDir, "/", "migrations")
-
-	// Проверяем, что директория существует
-	_, err = os.Stat(migrationsDir)
-	if err != nil {
-		return fmt.Errorf("migration directory not found: %s", migrationsDir)
-	}
-	fmt.Println("makin migration source")
-	// Создаем источник миграций из файловой системы
-	source, err := iofs.New(os.DirFS("musicLibrary"), migrationsDir)
-	if err != nil {
-		return err
-	}
-	fmt.Println("creating migrator")
-	// Создаем мигратор
-	driver, err := postgres.WithInstance(db, &postgres.Config{})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	migrator, err := migrate.NewWithInstance("iofs", source, "postgres", driver)
-	if err != nil {
-		return err
-	}
-	fmt.Println("STARTING migrations")
-	// Выполняем миграции
-	err = migrator.Up()
-	if err != nil && err != migrate.ErrNoChange {
-		return err
-	}
-
-	fmt.Println("Migrations applied successfully")
-
+	fmt.Println("Migrations completed successfully")
 	return nil
 }
 
 /*func insertMusic(db *sql.DB, s *Music) error {
 	fmt.Println("Workin insertMusic func")
-	insert := `INSERT INTO musicLibrary (group, song) VALUES ($1 ,$2, $3)`
+	insert := `INSERT INTO musicLibrary (band, song) VALUES ($1 ,$2, $3)`
 	_, err := db.Exec(insert, s.Group, s.Song)
 	return err
 }*/
